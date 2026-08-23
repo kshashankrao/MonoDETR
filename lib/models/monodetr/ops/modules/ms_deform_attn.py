@@ -31,10 +31,10 @@ from typing import Tuple, Optional
 
 import torch
 from torch import Tensor
-if float(torch.__version__.split('.')[0]) == 0 or (float(torch.__version__.split('.')[0]) == 1 and float(torch.__version__.split('.')[1])) < 9:
-    from torch.nn.modules.linear import _LinearWithBias
-else:
+try:
     from torch.nn.modules.linear import NonDynamicallyQuantizableLinear as _LinearWithBias
+except ImportError:
+    _LinearWithBias = nn.Linear
 from torch.nn.init import xavier_uniform_
 from torch.nn.init import constant_
 from torch.nn.init import xavier_normal_
