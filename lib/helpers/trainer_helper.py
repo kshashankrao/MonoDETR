@@ -51,16 +51,18 @@ class Trainer(object):
                             logger=self.logger)
 
         if cfg.get('resume_model', None):
-            resume_model_path = os.path.join(self.output_dir, "checkpoint.pth")
-            assert os.path.exists(resume_model_path)
-            self.epoch, self.best_result, self.best_epoch = load_checkpoint(
-                model=self.model.to(self.device),
-                optimizer=self.optimizer,
-                filename=resume_model_path,
-                map_location=self.device,
-                logger=self.logger)
-            self.lr_scheduler.last_epoch = self.epoch - 1
-            self.logger.info("Loading Checkpoint... Best Result:{}, Best Epoch:{}".format(self.best_result, self.best_epoch))
+            resume_model_path = os.path.join(self.output_dir, "latest_checkpoint.pth")
+            if os.path.exists(resume_model_path):
+                self.epoch, self.best_result, self.best_epoch = load_checkpoint(
+                    model=self.model.to(self.device),
+                    optimizer=self.optimizer,
+                    filename=resume_model_path,
+                    map_location=self.device,
+                    logger=self.logger)
+                self.lr_scheduler.last_epoch = self.epoch - 1
+                self.logger.info("Loading Checkpoint... Best Result:{}, Best Epoch:{}".format(self.best_result, self.best_epoch))
+            else:
+                self.logger.warning("resume_model is True but {} does not exist, starting from scratch.".format(resume_model_path))
         
     def train(self):
         start_epoch = self.epoch
@@ -85,14 +87,19 @@ class Trainer(object):
             # save trained model
             if (self.epoch % self.cfg['save_frequency']) == 0:
                 os.makedirs(self.output_dir, exist_ok=True)
-                if self.cfg['save_all']:
-                    ckpt_name = os.path.join(self.output_dir, 'checkpoint_epoch_%d' % self.epoch)
-                else:
-                    ckpt_name = os.path.join(self.output_dir, 'checkpoint')
-               
+                
+                # Always save the latest checkpoint
+                latest_ckpt_name = os.path.join(self.output_dir, 'latest_checkpoint')
                 save_checkpoint(
                     get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
-                    ckpt_name)
+                    latest_ckpt_name)
+
+                # Save the last epoch model
+                if self.epoch == self.cfg['max_epoch']:
+                    last_ckpt_name = os.path.join(self.output_dir, 'last_model')
+                    save_checkpoint(
+                        get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
+                        last_ckpt_name)
 
                 if self.tester is not None:
                     self.logger.info("Test Epoch {}".format(self.epoch))
@@ -101,7 +108,7 @@ class Trainer(object):
                     if cur_result > best_result:
                         best_result = cur_result
                         best_epoch = self.epoch
-                        ckpt_name = os.path.join(self.output_dir, 'checkpoint_best')
+                        ckpt_name = os.path.join(self.output_dir, 'best_model')
                         save_checkpoint(
                             get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
                             ckpt_name)
